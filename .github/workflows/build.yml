@@ -3,14 +3,15 @@ name: Build GALERY HUTANG APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup JDK 17
@@ -24,11 +25,30 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build APK
-        run: gradle assembleDebug
+      - name: Find Android project folder
+        shell: bash
+        run: |
+          SETTINGS_FILE=$(find . -type f \\( -name "settings.gradle" -o -name "settings.gradle.kts" \\) -not -path "*/.gradle/*" -print -quit)
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "::error::Tidak ditemukan settings.gradle. Pastikan isi proyek Android sudah di-upload dan diekstrak ke repository."
+            echo "Isi folder repository:"
+            find . -maxdepth 4 -type f | sort | head -200
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
+          echo "ANDROID_PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Proyek Android ditemukan di: $PROJECT_DIR"
+
+      - name: Build Debug APK
+        shell: bash
+        run: |
+          cd "$ANDROID_PROJECT_DIR"
+          gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: GALERY-HUTANG-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            **/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
