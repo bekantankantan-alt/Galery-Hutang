@@ -28,13 +28,18 @@ jobs:
       - name: Find Android project folder
         shell: bash
         run: |
-          SETTINGS_FILE=$(find . -type f \\( -name "settings.gradle" -o -name "settings.gradle.kts" \\) -not -path "*/.gradle/*" -print -quit)
+          SETTINGS_FILE=$(find . -name "settings.gradle" -not -path "*/.gradle/*" -print -quit)
           if [ -z "$SETTINGS_FILE" ]; then
-            echo "::error::Tidak ditemukan settings.gradle. Pastikan isi proyek Android sudah di-upload dan diekstrak ke repository."
-            echo "Isi folder repository:"
-            find . -maxdepth 4 -type f | sort | head -200
+            SETTINGS_FILE=$(find . -name "settings.gradle.kts" -not -path "*/.gradle/*" -print -quit)
+          fi
+
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "::error::settings.gradle tidak ditemukan. Pastikan file proyek Android sudah diekstrak ke repository."
+            echo "Daftar file repository:"
+            find . -maxdepth 5 -type f | sort | head -200
             exit 1
           fi
+
           PROJECT_DIR=$(dirname "$SETTINGS_FILE")
           echo "ANDROID_PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Proyek Android ditemukan di: $PROJECT_DIR"
@@ -49,6 +54,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: GALERY-HUTANG-APK
-          path: |
-            **/build/outputs/apk/debug/*.apk
+          path: "**/build/outputs/apk/debug/*.apk"
           if-no-files-found: error
