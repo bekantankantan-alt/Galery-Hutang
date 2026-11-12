@@ -20,33 +20,57 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Install unzip
+        run: sudo apt-get update && sudo apt-get install -y unzip
+
+      - name: Prepare Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # If the Android project is already extracted, use it.
+          SETTINGS_FILE="$(find . -type f \( -name settings.gradle -o -name settings.gradle.kts \) \
+            -not -path './.git/*' -not -path '*/.gradle/*' \
+            -not -path './_android_project/*' -print -quit)"
+
+          # Otherwise extract the project ZIP stored in the repository.
+          if [ -z "$SETTINGS_FILE" ]; then
+            ZIP_FILE="$(find . -maxdepth 3 -type f -iname '*.zip' \
+              -not -path './.git/*' -print -quit)"
+
+            if [ -z "$ZIP_FILE" ]; then
+              echo "::error::Tidak ditemukan proyek Android maupun file ZIP proyek."
+              find . -maxdepth 4 -type f -print | sort | head -200
+              exit 1
+            fi
+
+            echo "ZIP proyek ditemukan: $ZIP_FILE"
+            mkdir -p _android_project
+            unzip -o "$ZIP_FILE" -d _android_project
+
+            SETTINGS_FILE="$(find _android_project -type f \( -name settings.gradle -o -name settings.gradle.kts \
+              \) -not -path '*/.gradle/*' -print -quit)"
+          fi
+
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "::error::ZIP berhasil diproses, tetapi settings.gradle tidak ditemukan."
+            find _android_project -maxdepth 6 -type f -print | sort | head -250
+            exit 1
+          fi
+
+          PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
+          echo "ANDROID_PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Proyek Android siap di: $PROJECT_DIR"
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Find Android project folder
+      - name: Build APK
         shell: bash
         run: |
-          SETTINGS_FILE=$(find . -name "settings.gradle" -not -path "*/.gradle/*" -print -quit)
-          if [ -z "$SETTINGS_FILE" ]; then
-            SETTINGS_FILE=$(find . -name "settings.gradle.kts" -not -path "*/.gradle/*" -print -quit)
-          fi
-
-          if [ -z "$SETTINGS_FILE" ]; then
-            echo "::error::settings.gradle tidak ditemukan. Pastikan file proyek Android sudah diekstrak ke repository."
-            echo "Daftar file repository:"
-            find . -maxdepth 5 -type f | sort | head -200
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
-          echo "ANDROID_PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Proyek Android ditemukan di: $PROJECT_DIR"
-
-      - name: Build Debug APK
-        shell: bash
-        run: |
+          set -euo pipefail
           cd "$ANDROID_PROJECT_DIR"
           gradle assembleDebug --stacktrace
 
